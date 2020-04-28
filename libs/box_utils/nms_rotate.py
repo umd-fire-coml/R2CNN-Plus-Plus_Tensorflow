@@ -8,12 +8,12 @@ import numpy as np
 import cv2
 from libs.configs import cfgs
 import tensorflow as tf
-if cfgs.ROTATE_NMS_USE_GPU:
-    from libs.box_utils.rotate_polygon_nms import rotate_gpu_nms
+# if cfgs.ROTATE_NMS_USE_GPU:
+#     from libs.box_utils.rotate_polygon_nms import rotate_gpu_nms
 
 
 def nms_rotate(decode_boxes, scores, iou_threshold, max_output_size,
-               use_angle_condition=False, angle_threshold=0, use_gpu=True, gpu_id=0):
+               use_angle_condition=False, angle_threshold=0, use_gpu=None, gpu_id=0):
     """
     :param boxes: format [x_c, y_c, w, h, theta]
     :param scores: scores of boxes
@@ -22,23 +22,9 @@ def nms_rotate(decode_boxes, scores, iou_threshold, max_output_size,
     :return: the remaining index of boxes
     """
 
-    if use_gpu:
-        keep = nms_rotate_gpu(boxes_list=decode_boxes,
-                              scores=scores,
-                              iou_threshold=iou_threshold,
-                              angle_gap_threshold=angle_threshold,
-                              use_angle_condition=use_angle_condition,
-                              device_id=gpu_id)
-
-        keep = tf.cond(
-            tf.greater(tf.shape(keep)[0], max_output_size),
-            true_fn=lambda: tf.slice(keep, [0], [max_output_size]),
-            false_fn=lambda: keep)
-
-    else:
-        keep = tf.py_func(nms_rotate_cpu,
-                          inp=[decode_boxes, scores, iou_threshold, max_output_size],
-                          Tout=tf.int64)
+    keep = tf.py_func(nms_rotate_cpu,
+                      inp=[decode_boxes, scores, iou_threshold, max_output_size],
+                      Tout=tf.int64)
     return keep
 
 
@@ -92,27 +78,6 @@ def nms_rotate_cpu(boxes, scores, iou_threshold, max_output_size):
                 suppressed[j] = 1
 
     return np.array(keep, np.int64)
-
-
-def nms_rotate_gpu(boxes_list, scores, iou_threshold, use_angle_condition=False, angle_gap_threshold=0, device_id=0):
-    if use_angle_condition:
-        x_c, y_c, w, h, theta = tf.unstack(boxes_list, axis=1)
-        boxes_list = tf.transpose(tf.stack([x_c, y_c, w, h, theta]))
-        det_tensor = tf.concat([boxes_list, tf.expand_dims(scores, axis=1)], axis=1)
-        keep = tf.py_func(rotate_gpu_nms,
-                          inp=[det_tensor, iou_threshold, device_id],
-                          Tout=tf.int64)
-        return keep
-    else:
-        x_c, y_c, w, h, theta = tf.unstack(boxes_list, axis=1)
-        boxes_list = tf.transpose(tf.stack([x_c, y_c, w, h, theta]))
-        det_tensor = tf.concat([boxes_list, tf.expand_dims(scores, axis=1)], axis=1)
-        keep = tf.py_func(rotate_gpu_nms,
-                          inp=[det_tensor, iou_threshold, device_id],
-                          Tout=tf.int64)
-        keep = tf.reshape(keep, [-1])
-        return keep
-
 
 if __name__ == '__main__':
     boxes = np.array([[50, 50, 100, 100, 0],
