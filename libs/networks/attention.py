@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-
+import libs.configs.cfgs as cfgs
 
 def build_attention(inputs, is_training):
     attention_conv3x3_1 = slim.conv2d(inputs, 256, [3, 3],
